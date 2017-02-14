@@ -2,34 +2,50 @@ FROM debian:stable
 
 MAINTAINER Richard Fakenberg <richard.fakenberg@gmail.com>
 
-EXPOSE 8080
+EXPOSE 80
+
+ENV NOMINATIM_VERSION v2.5.1
 
 RUN apt-get update \
  && apt-get install -y build-essential libxml2-dev libpq-dev libbz2-dev libtool automake \
 	libproj-dev libboost-dev libboost-system-dev libboost-filesystem-dev libboost-thread-dev \
 	libexpat-dev gcc proj-bin libgeos-c1 libgeos++-dev libexpat-dev php5 php-pear php5-pgsql \
 	php5-json php-db libapache2-mod-php5 postgresql postgis postgresql-contrib \
-	postgresql-9.4-postgis-2.1 postgresql-server-dev-9.4 wget
+	postgresql-9.4-postgis-2.1 postgresql-server-dev-9.4 wget curl git
 
-RUN wget http://www.nominatim.org/release/Nominatim-2.5.1.tar.bz2 \
- && tar xvf Nominatim-2.5.1.tar.bz2 \
- && rm Nominatim-2.5.1.tar.bz2 \
- && mv Nominatim-2.5.1 /home/nominatim \
- && cd /home/nominatim \
+WORKDIR /app
+
+RUN git clone --recursive git://github.com/twain47/Nominatim.git /app/nominatim \
+ && cd /app/nominatim \
+ && git checkout $NOMINATIM_VERSION \
+ && git submodule update --recursive --init \
+ && ./autogen.sh \
  && ./configure \
  && make
 
 RUN echo "host all all 0.0.0.0/0 trust" >> /etc/postgresql/9.4/main/pg_hba.conf \
  && echo "listen_addresses='*'" >> /etc/postgresql/9.4/main/postgresql.conf \
- && touch /home/nominatim/settings/local.php \
- && echo "<?php\r\n" >> /home/nominatim/settings/local.php \
- && echo "  @define('CONST_Postgresql_Version', '9.4');\r\n" >> /home/nominatim/settings/local.php \
- && echo "  @define('CONST_Postgis_Version', '2.1');\r\n" >> /home/nominatim/settings/local.php \
- && echo "  @define('CONST_Website_BaseURL', '/');\r\n" >> /home/nominatim/settings/local.php \
- && echo "  @define('CONST_Replication_Url', 'http://download.geofabrik.de/monaco-updates');\r\n" >> /home/nominatim/settings/local.php \
- && echo "  @define('CONST_Replication_MaxInterval', '86400');" >> /home/nominatim/settings/local.php \
- && echo "  @define('CONST_Replication_Update_Interval', '86400');" >> /home/nominatim/settings/local.php \
- && echo "  @define('CONST_Replication_Recheck_Interval', '900');" >> /home/nominatim/settings/local.php
- 
+ && touch /app/nominatim/settings/local.php \
+ && echo "<?php" >> /app/nominatim/settings/local.php \
+ && echo "  @define('CONST_Postgresql_Version', '9.4');" >> /app/nominatim/settings/local.php \
+ && echo "  @define('CONST_Postgis_Version', '2.1');" >> /app/nominatim/settings/local.php \
+ && echo "  @define('CONST_Website_BaseURL', '/');" >> /app/nominatim/settings/local.php \
+ && echo "  @define('CONST_Replication_Url', 'http://download.geofabrik.de/monaco-updates');" >> /app/nominatim/settings/local.php \
+ && echo "  @define('CONST_Replication_MaxInterval', '86400');" >> /app/nominatim/settings/local.php \
+ && echo "  @define('CONST_Replication_Update_Interval', '86400');" >> /app/nominatim/settings/local.php \
+ && echo "  @define('CONST_Replication_Recheck_Interval', '900');" >> /app/nominatim/settings/local.php
+
+RUN rm -rf /var/www/html/* && /app/nominatim/utils/setup.php --create-website /var/www/html
+
+ENV PBF_DATA http://download.geofabrik.de/europe/monaco-latest.osm.pbf
+RUN curl $PBF_DATA --create-dirs -o /app/data.osm.pbf
+RUN service postgresql start \
+ && su -s /bin/bash postgres -c 'psql postgres -tAc "SELECT 1 FROM pg_roles WHERE rolname='nominatim'"' | grep -q 1 || su -s /bin/bash postgres -c 'createuser -s nominatim' \
+ && su -s /bin/bash postgres -c 'psql postgres -tAc "SELECT 1 FROM pg_roles WHERE rolname='www-data'"' | grep -q 1 || su -s /bin/bash postgres -c 'createuser -SDR www-data' \ 
+ && su -s /bin/bash postgres -c 'psql postgres -c "DROP DATABASE IF EXISTS nominatim"' postgress \
+ && useradd -m -p password1234 nominatim \
+ && su -s /bin/bash nominatim -c '/app/nominatim/utils/setup.php --osm-file /app/data.osm.pbf --all --threads 2' \
+ && service postgresql stop
+
 CMD service postgresql start \
  && /usr/sbin/apache2ctl -D FOREGROUND
