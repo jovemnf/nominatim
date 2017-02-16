@@ -28,7 +28,7 @@ RUN useradd -d /srv/nominatim -s /bin/bash -m nominatim \
  && mkdir build \
  && cd build \
  && cmake /srv/nominatim/Nominatim \
- && make
+ && make 
 
 RUN service postgresql start \
  && su -s /bin/bash postgres -c 'createuser -s root' \
@@ -37,6 +37,8 @@ RUN service postgresql start \
  && service postgresql stop
 
 RUN local=/srv/nominatim/Nominatim/build/settings/local.php \
+ && ln -s /srv/nominatim/Nominatim/build/utils/setup.php /usr/bin/setup \
+ && ln -s /srv/nominatim/Nominatim/build/utils/update.php /usr/bin/update \
  && touch $local \
  && echo "<?php" >> $local \
  && echo "  @define('CONST_Website_BaseURL', '/');" >> $local \
