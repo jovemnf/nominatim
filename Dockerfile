@@ -15,7 +15,7 @@ RUN apt-get update -qq \
 	libbz2-dev libpq-dev libgeos-dev libgeos++-dev libproj-dev \
 	postgresql-server-dev-9.5 postgresql-9.5-postgis-2.2 postgresql-contrib-9.5 \
 	apache2 php php-pgsql libapache2-mod-php php-pear php-db git wget \
-	postgresql postgresql-contrib \
+	postgresql postgresql-contrib osmosis \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/* \
  && rm -rf /tmp/* /var/tmp/*
@@ -31,6 +31,7 @@ RUN useradd -d /srv/nominatim -s /bin/bash -m nominatim \
  && make
 
 RUN service postgresql start \
+ && su -s /bin/bash postgres -c 'createuser -s root' \
  && su -s /bin/bash postgres -c 'createuser -s nominatim' \
  && su -s /bin/bash postgres -c 'createuser -SDR www-data' \ 
  && service postgresql stop
