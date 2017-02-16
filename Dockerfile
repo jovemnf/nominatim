@@ -38,9 +38,8 @@ RUN service postgresql start \
 RUN local=/srv/nominatim/Nominatim/build/settings/local.php \
  && touch $local \
  && echo "<?php" >> $local \
- && echo "  @define('CONST_Postgresql_Version', '9.5');" >> $local \
- && echo "  @define('CONST_Postgis_Version', '2.5');" >> $local \
  && echo "  @define('CONST_Website_BaseURL', '/');" >> $local \
+ && echo "  @define('CONST_Replication_Url', 'http://download.geofabrik.de/europe-updates/');" >> $local \
  && echo "  @define('CONST_Replication_MaxInterval', '86400');" >> $local \
  && echo "  @define('CONST_Replication_Update_Interval', '86400');" >> $local \
  && echo "  @define('CONST_Replication_Recheck_Interval', '900');" >> $local
@@ -50,11 +49,15 @@ RUN config=/etc/apache2/conf-available/nominatim.conf \
  && echo "<Directory '/srv/nominatim/Nominatim/build/website'>" >> $config \
  && echo "  Options FollowSymLinks MultiViews" >> $config \
  && echo "  AddType text/html   .php" >> $config \
+ && echo "  DirectoryIndex search.php" >> $config \
  && echo "  Require all granted" >> $config \
  && echo "</Directory>" >> $config \
  && echo "" >> $config \
  && echo "Alias / /srv/nominatim/Nominatim/build/website/" >> $config \
+ && echo "ServerName localhost" >> /etc/apache2/apache2.conf \
  && a2enconf nominatim
+
+VOLUME /srv /var/lib/postgresql /var/log/apache2
 
 CMD service postgresql start \
  && /usr/sbin/apache2ctl -D FOREGROUND
